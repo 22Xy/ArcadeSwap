@@ -66,6 +66,28 @@ contract ArcadeSwapPair is ERC20, Math {
         emit Mint(msg.sender, amount0, amount1);
     }
 
+    function burn() public {
+        uint256 balance0 = IERC20(token0).balanceOf(address(this));
+        uint256 balance1 = IERC20(token1).balanceOf(address(this));
+        uint256 liquidity = balanceOf[msg.sender];
+
+        uint256 amount0 = (liquidity * balance0) / totalSupply;
+        uint256 amount1 = (liquidity * balance1) / totalSupply;
+
+        if (amount0 <= 0 || amount1 <= 0) revert InsufficientLiquidityBurned();
+
+        _burn(msg.sender, liquidity);
+
+        _safeTransfer(token0, msg.sender, amount0);
+        _safeTransfer(token1, msg.sender, amount1);
+
+        balance0 = IERC20(token0).balanceOf(address(this));
+        balance1 = IERC20(token1).balanceOf(address(this));
+
+        _update(balance0, balance1);
+        emit Burn(msg.sender, amount0, amount1);
+    }
+
     /// Helper Functions ///
     function getReserves() public view returns (uint112, uint112, uint32) {
         return (reserve0, reserve1, 0);
@@ -77,5 +99,13 @@ contract ArcadeSwapPair is ERC20, Math {
         reserve1 = uint112(balance1);
 
         emit Sync(reserve0, reserve1);
+    }
+
+    function _safeTransfer(address token, address to, uint256 amount) private {
+        (bool success, bytes memory data) = token.call(
+            abi.encodeWithSignature("transfer(address,uint256)", to, amount)
+        );
+        if (!success || (data.length != 0 && !abi.decode(data, (bool))))
+            revert TransferFailed();
     }
 }
