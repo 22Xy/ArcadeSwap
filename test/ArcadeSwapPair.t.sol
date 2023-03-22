@@ -4,6 +4,8 @@ pragma solidity ^0.8.10;
 import "forge-std/Test.sol";
 import "../src/ArcadeSwapPair.sol";
 import "./mocks/ERC20Mintable.sol";
+import "../src/libs/UQ112x112.sol";
+import {console} from "forge-std/console.sol";
 
 contract ArcadeSwapPairTest is Test {
     ERC20Mintable token0;
@@ -210,13 +212,240 @@ contract ArcadeSwapPairTest is Test {
 
         // Loads a storage slot from an address
         bytes32 val = vm.load(address(pair), bytes32(uint256(8)));
+        // console.logBytes32(val);
         assertEq(
             val,
-            hex"000000000000000000001bc16d674ec800000000000000000de0b6b3a7640000"
+            hex"000000010000000000001bc16d674ec800000000000000000de0b6b3a7640000"
         );
     }
 
+    function testSwapBasicScenario() public {
+        token0.transfer(address(pair), 1 ether);
+        token1.transfer(address(pair), 2 ether);
+        pair.mint();
+
+        token0.transfer(address(pair), 0.1 ether);
+        pair.swap(0, 0.18 ether, address(this));
+
+        assertEq(
+            token0.balanceOf(address(this)),
+            10 ether - 1 ether - 0.1 ether,
+            "unexpected token0 balance"
+        );
+        assertEq(
+            token1.balanceOf(address(this)),
+            10 ether - 2 ether + 0.18 ether,
+            "unexpected token1 balance"
+        );
+        assertReserves(1 ether + 0.1 ether, 2 ether - 0.18 ether);
+    }
+
+    function testSwapBasicScenarioReverseDirection() public {
+        token0.transfer(address(pair), 1 ether);
+        token1.transfer(address(pair), 2 ether);
+        pair.mint();
+
+        token1.transfer(address(pair), 0.2 ether);
+        pair.swap(0.09 ether, 0, address(this));
+
+        assertEq(
+            token0.balanceOf(address(this)),
+            10 ether - 1 ether + 0.09 ether,
+            "unexpected token0 balance"
+        );
+        assertEq(
+            token1.balanceOf(address(this)),
+            10 ether - 2 ether - 0.2 ether,
+            "unexpected token1 balance"
+        );
+        assertReserves(1 ether - 0.09 ether, 2 ether + 0.2 ether);
+    }
+
+    function testSwapBidirectional() public {
+        token0.transfer(address(pair), 1 ether);
+        token1.transfer(address(pair), 2 ether);
+        pair.mint();
+
+        token0.transfer(address(pair), 0.1 ether);
+        token1.transfer(address(pair), 0.2 ether);
+        pair.swap(0.09 ether, 0.18 ether, address(this));
+
+        assertEq(
+            token0.balanceOf(address(this)),
+            10 ether - 1 ether - 0.01 ether,
+            "unexpected token0 balance"
+        );
+        assertEq(
+            token1.balanceOf(address(this)),
+            10 ether - 2 ether - 0.02 ether,
+            "unexpected token1 balance"
+        );
+        assertReserves(1 ether + 0.01 ether, 2 ether + 0.02 ether);
+    }
+
+    function testSwapZeroAmountOut() public {
+        token0.transfer(address(pair), 1 ether);
+        token1.transfer(address(pair), 2 ether);
+        pair.mint();
+
+        vm.expectRevert(bytes(hex"42301c23")); // InsufficientOutputAmount()
+        pair.swap(0, 0, address(this));
+    }
+
+    function testSwapInsufficientLiquidity() public {
+        token0.transfer(address(pair), 1 ether);
+        token1.transfer(address(pair), 2 ether);
+        pair.mint();
+
+        vm.expectRevert(bytes(hex"bb55fd27")); // InsufficientLiquidity()
+        pair.swap(0, 2.1 ether, address(this));
+
+        vm.expectRevert(bytes(hex"bb55fd27")); // InsufficientLiquidity()
+        pair.swap(1.1 ether, 0, address(this));
+    }
+
+    function testSwapInvalidEqualK() public {
+        token0.transfer(address(pair), 1 ether);
+        token1.transfer(address(pair), 2 ether);
+        pair.mint();
+
+        token1.transfer(address(pair), 0.2 ether);
+        vm.expectRevert(bytes(hex"bd8bc364")); // InvalidK() -- when product is equal to k
+        pair.swap(1 ether, 0, address(this));
+
+        assertEq(
+            token0.balanceOf(address(this)),
+            10 ether - 1 ether,
+            "unexpected token0 balance"
+        );
+        assertEq(
+            token1.balanceOf(address(this)),
+            10 ether - 2 ether - 0.2 ether,
+            "unexpected token1 balance"
+        );
+        assertReserves(1 ether, 2 ether);
+    }
+
+    function testSwapUnderpriced() public {
+        token0.transfer(address(pair), 1 ether);
+        token1.transfer(address(pair), 2 ether);
+        pair.mint();
+
+        token0.transfer(address(pair), 0.1 ether);
+        pair.swap(0, 0.09 ether, address(this));
+
+        assertEq(
+            token0.balanceOf(address(this)),
+            10 ether - 1 ether - 0.1 ether,
+            "unexpected token0 balance"
+        );
+        assertEq(
+            token1.balanceOf(address(this)),
+            10 ether - 2 ether + 0.09 ether,
+            "unexpected token1 balance"
+        );
+        assertReserves(1 ether + 0.1 ether, 2 ether - 0.09 ether);
+    }
+
+    function testSwapOverpriced() public {
+        token0.transfer(address(pair), 1 ether);
+        token1.transfer(address(pair), 2 ether);
+        pair.mint();
+
+        token0.transfer(address(pair), 0.1 ether);
+
+        vm.expectRevert(bytes(hex"bd8bc364")); // InvalidK()
+        pair.swap(0, 0.36 ether, address(this));
+
+        assertEq(
+            token0.balanceOf(address(this)),
+            10 ether - 1 ether - 0.1 ether,
+            "unexpected token0 balance"
+        );
+        assertEq(
+            token1.balanceOf(address(this)),
+            10 ether - 2 ether,
+            "unexpected token1 balance"
+        );
+        assertReserves(1 ether, 2 ether);
+    }
+
+    function testCumulativePrices() public {
+        // https://book.getfoundry.sh/cheatcodes/warp
+        // warp() sets block.timestamp
+        vm.warp(0);
+        token0.transfer(address(pair), 1 ether);
+        token1.transfer(address(pair), 1 ether);
+        pair.mint();
+
+        (
+            uint256 initialPrice0,
+            uint256 initialPrice1
+        ) = calculateCurrentPrice();
+
+        // 0 seconds passed.
+        pair.sync();
+        assertCumulativePrices(0, 0);
+
+        // 1 second passed.
+        vm.warp(1);
+        pair.sync();
+        assertBlockTimestampLast(1);
+        assertCumulativePrices(initialPrice0, initialPrice1);
+
+        // 2 seconds passed.
+        vm.warp(2);
+        pair.sync();
+        assertBlockTimestampLast(2);
+        assertCumulativePrices(initialPrice0 * 2, initialPrice1 * 2);
+
+        // 3 seconds passed.
+        vm.warp(3);
+        pair.sync();
+        assertBlockTimestampLast(3);
+        assertCumulativePrices(initialPrice0 * 3, initialPrice1 * 3);
+
+        // Price changed.
+        token0.transfer(address(pair), 2 ether);
+        token1.transfer(address(pair), 1 ether);
+        pair.mint();
+
+        (uint256 newPrice0, uint256 newPrice1) = calculateCurrentPrice();
+
+        // // 0 seconds since last reserves update.
+        assertCumulativePrices(initialPrice0 * 3, initialPrice1 * 3);
+
+        // // 1 second passed.
+        vm.warp(4);
+        pair.sync();
+        assertBlockTimestampLast(4);
+        assertCumulativePrices(
+            initialPrice0 * 3 + newPrice0,
+            initialPrice1 * 3 + newPrice1
+        );
+
+        // 2 seconds passed.
+        vm.warp(5);
+        pair.sync();
+        assertBlockTimestampLast(5);
+        assertCumulativePrices(
+            initialPrice0 * 3 + newPrice0 * 2,
+            initialPrice1 * 3 + newPrice1 * 2
+        );
+
+        // 3 seconds passed.
+        vm.warp(6);
+        pair.sync();
+        assertBlockTimestampLast(6);
+        assertCumulativePrices(
+            initialPrice0 * 3 + newPrice0 * 3,
+            initialPrice1 * 3 + newPrice1 * 3
+        );
+    }
+
+    ////////////////////////
     /// Helper Functions ///
+    ////////////////////////
     function assertReserves(
         uint112 expectedReserve0,
         uint112 expectedReserve1
@@ -224,6 +453,46 @@ contract ArcadeSwapPairTest is Test {
         (uint112 reserve0, uint112 reserve1, ) = pair.getReserves();
         assertEq(reserve0, expectedReserve0, "unexpected reserve0");
         assertEq(reserve1, expectedReserve1, "unexpected reserve0");
+    }
+
+    function assertCumulativePrices(
+        uint256 expectedPrice0,
+        uint256 expectedPrice1
+    ) internal {
+        assertEq(
+            pair.price0CumulativeLast(),
+            expectedPrice0,
+            "unexpected cumulative price 0"
+        );
+        assertEq(
+            pair.price1CumulativeLast(),
+            expectedPrice1,
+            "unexpected cumulative price 1"
+        );
+    }
+
+    function calculateCurrentPrice()
+        internal
+        view
+        returns (uint256 price0, uint256 price1)
+    {
+        (uint112 reserve0, uint112 reserve1, ) = pair.getReserves();
+        price0 = reserve0 > 0
+            ? (reserve1 * uint256(UQ112x112.Q112)) / reserve0
+            : 0;
+        price1 = reserve1 > 0
+            ? (reserve0 * uint256(UQ112x112.Q112)) / reserve1
+            : 0;
+    }
+
+    function assertBlockTimestampLast(uint32 expectedTimestamp) internal {
+        (, , uint32 blockTimestampLast) = pair.getReserves();
+        // console.log(blockTimestampLast);
+        assertEq(
+            blockTimestampLast,
+            expectedTimestamp,
+            "unexpected blockTimestampLast"
+        );
     }
 }
 
