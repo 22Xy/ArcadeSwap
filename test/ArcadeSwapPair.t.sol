@@ -3,6 +3,7 @@ pragma solidity ^0.8.10;
 
 import "forge-std/Test.sol";
 import "../src/ArcadeSwapPair.sol";
+import "../src/ArcadeSwapFactory.sol";
 import "./mocks/ERC20Mintable.sol";
 import "../src/libs/UQ112x112.sol";
 import {console} from "forge-std/console.sol";
@@ -20,7 +21,13 @@ contract ArcadeSwapPairTest is Test {
         token0 = new ERC20Mintable("Ether", "ETH");
         token1 = new ERC20Mintable("USD Coin", "USDC");
 
-        pair = new ArcadeSwapPair(address(token0), address(token1));
+        ArcadeSwapFactory factory = new ArcadeSwapFactory();
+        address pairAddress = factory.createPair(
+            address(token0),
+            address(token1)
+        );
+
+        pair = ArcadeSwapPair(pairAddress);
 
         token0.mint(address(this), 10 ether);
         token1.mint(address(this), 10 ether);
@@ -81,16 +88,15 @@ contract ArcadeSwapPairTest is Test {
     function testMintLiquidityUnderflow() public {
         // 0x11: If an arithmetic operation results in underflow
         // or overflow outside of an unchecked { ... } block.
-        vm.expectRevert(
-            hex"4e487b710000000000000000000000000000000000000000000000000000000000000011"
-        );
+        // hex"4e487b710000000000000000000000000000000000000000000000000000000000000011"
+        vm.expectRevert(encodeError("Panic(uint256)", 0x11));
         pair.mint();
     }
 
     function testMintZeroInitialLiquidity() public {
         token0.transfer(address(pair), 1000);
         token1.transfer(address(pair), 1000);
-        vm.expectRevert(bytes(hex"d226f9d4")); // InsufficientLiquidityMinted()
+        vm.expectRevert(encodeError("InsufficientLiquidityMinted()")); // bytes(hex"d226f9d4")
         pair.mint();
     }
 
@@ -185,9 +191,8 @@ contract ArcadeSwapPairTest is Test {
 
     function testBurnZeroTotalSupply() public {
         // 0x12; If you divide or modulo by zero.
-        vm.expectRevert(
-            hex"4e487b710000000000000000000000000000000000000000000000000000000000000012"
-        );
+        // hex"4e487b710000000000000000000000000000000000000000000000000000000000000012"
+        vm.expectRevert(encodeError("Panic(uint256)", 0x12));
         pair.burn();
     }
 
@@ -199,9 +204,8 @@ contract ArcadeSwapPairTest is Test {
 
         // Burn as a user who hasn't provided liquidity.
         // bytes memory prankData = abi.encodeWithSignature("burn()");
-
         vm.prank(address(0xdeadbeef));
-        vm.expectRevert(bytes(hex"749383ad")); // InsufficientLiquidityBurned()
+        vm.expectRevert(encodeError("InsufficientLiquidityBurned()")); // hex"749383ad"
         pair.burn();
     }
 
@@ -287,8 +291,7 @@ contract ArcadeSwapPairTest is Test {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 2 ether);
         pair.mint();
-
-        vm.expectRevert(bytes(hex"42301c23")); // InsufficientOutputAmount()
+        vm.expectRevert(encodeError("InsufficientOutputAmount()")); //  hex"42301c23"
         pair.swap(0, 0, address(this));
     }
 
@@ -297,10 +300,10 @@ contract ArcadeSwapPairTest is Test {
         token1.transfer(address(pair), 2 ether);
         pair.mint();
 
-        vm.expectRevert(bytes(hex"bb55fd27")); // InsufficientLiquidity()
+        vm.expectRevert(encodeError("InsufficientLiquidity()")); // hex"bb55fd27"
         pair.swap(0, 2.1 ether, address(this));
 
-        vm.expectRevert(bytes(hex"bb55fd27")); // InsufficientLiquidity()
+        vm.expectRevert(encodeError("InsufficientLiquidity()")); // hex"bb55fd27"
         pair.swap(1.1 ether, 0, address(this));
     }
 
@@ -310,7 +313,7 @@ contract ArcadeSwapPairTest is Test {
         pair.mint();
 
         token1.transfer(address(pair), 0.2 ether);
-        vm.expectRevert(bytes(hex"bd8bc364")); // InvalidK() -- when product is equal to k
+        vm.expectRevert(encodeError("InvalidK()")); // hex"bd8bc364" -- when product is equal to k
         pair.swap(1 ether, 0, address(this));
 
         assertEq(
@@ -354,7 +357,8 @@ contract ArcadeSwapPairTest is Test {
 
         token0.transfer(address(pair), 0.1 ether);
 
-        vm.expectRevert(bytes(hex"bd8bc364")); // InvalidK()
+        // console.logBytes(encodeError("InvalidK()"));
+        vm.expectRevert(encodeError("InvalidK()")); // hex"bd8bc364"
         pair.swap(0, 0.36 ether, address(this));
 
         assertEq(
@@ -446,6 +450,19 @@ contract ArcadeSwapPairTest is Test {
     ////////////////////////
     /// Helper Functions ///
     ////////////////////////
+    function encodeError(
+        string memory error
+    ) internal pure returns (bytes memory encoded) {
+        encoded = abi.encodeWithSignature(error);
+    }
+
+    function encodeError(
+        string memory error,
+        uint256 a
+    ) internal pure returns (bytes memory encoded) {
+        encoded = abi.encodeWithSignature(error, a);
+    }
+
     function assertReserves(
         uint112 expectedReserve0,
         uint112 expectedReserve1
