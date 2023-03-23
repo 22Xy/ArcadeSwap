@@ -44,7 +44,7 @@ contract ArcadeSwapPairTest is Test {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 1 ether);
 
-        pair.mint();
+        pair.mint(address(this));
 
         assertReserves(1 ether, 1 ether);
         assertEq(pair.balanceOf(address(this)), 1 ether - 1000);
@@ -55,11 +55,13 @@ contract ArcadeSwapPairTest is Test {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 1 ether);
 
-        pair.mint(); // + 1 LP
+        pair.mint(address(this)); // + 1 LP
+
+        vm.warp(42);
 
         token0.transfer(address(pair), 2 ether);
         token1.transfer(address(pair), 2 ether);
-        pair.mint(); // + 2 LP
+        pair.mint(address(this)); // + 2 LP
 
         assertReserves(3 ether, 3 ether);
         assertEq(pair.balanceOf(address(this)), 3 ether - 1000);
@@ -70,7 +72,7 @@ contract ArcadeSwapPairTest is Test {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 1 ether);
 
-        pair.mint(); // + 1 LP
+        pair.mint(address(this)); // + 1 LP
         assertEq(pair.balanceOf(address(this)), 1 ether - 1000);
         assertReserves(1 ether, 1 ether);
 
@@ -80,7 +82,7 @@ contract ArcadeSwapPairTest is Test {
         // even though user provided more token0 liquidity
         // than token1 liquidity, they still got only 1 LP-token.
         // since we take the min between tokens
-        pair.mint(); // + 1 LP
+        pair.mint(address(this)); // + 1 LP
         assertReserves(3 ether, 2 ether);
         assertEq(pair.balanceOf(address(this)), 2 ether - 1000);
     }
@@ -90,21 +92,21 @@ contract ArcadeSwapPairTest is Test {
         // or overflow outside of an unchecked { ... } block.
         // hex"4e487b710000000000000000000000000000000000000000000000000000000000000011"
         vm.expectRevert(encodeError("Panic(uint256)", 0x11));
-        pair.mint();
+        pair.mint(address(this));
     }
 
     function testMintZeroInitialLiquidity() public {
         token0.transfer(address(pair), 1000);
         token1.transfer(address(pair), 1000);
         vm.expectRevert(encodeError("InsufficientLiquidityMinted()")); // bytes(hex"d226f9d4")
-        pair.mint();
+        pair.mint(address(this));
     }
 
     function testBurn() public {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 1 ether);
 
-        pair.mint(); // + 1 LP
+        pair.mint(address(this)); // + 1 LP
 
         pair.burn(); // - 1 LP
 
@@ -119,12 +121,12 @@ contract ArcadeSwapPairTest is Test {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 1 ether);
 
-        pair.mint();
+        pair.mint(address(this));
 
         token0.transfer(address(pair), 2 ether);
         token1.transfer(address(pair), 1 ether);
 
-        pair.mint(); // + 1 LP
+        pair.mint(address(this)); // + 1 LP
 
         pair.burn();
 
@@ -157,7 +159,7 @@ contract ArcadeSwapPairTest is Test {
         token0.transfer(address(pair), 2 ether);
         token1.transfer(address(pair), 1 ether);
 
-        pair.mint(); // + 1 LP
+        pair.mint(address(this)); // + 1 LP
 
         assertEq(pair.balanceOf(address(this)), 1 ether);
 
@@ -200,7 +202,7 @@ contract ArcadeSwapPairTest is Test {
         // Transfer and mint as a normal user.
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 1 ether);
-        pair.mint();
+        pair.mint(address(this));
 
         // Burn as a user who hasn't provided liquidity.
         // bytes memory prankData = abi.encodeWithSignature("burn()");
@@ -212,7 +214,7 @@ contract ArcadeSwapPairTest is Test {
     function testReservesPacking() public {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 2 ether);
-        pair.mint();
+        pair.mint(address(this));
 
         // Loads a storage slot from an address
         bytes32 val = vm.load(address(pair), bytes32(uint256(8)));
@@ -226,7 +228,7 @@ contract ArcadeSwapPairTest is Test {
     function testSwapBasicScenario() public {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 2 ether);
-        pair.mint();
+        pair.mint(address(this));
 
         token0.transfer(address(pair), 0.1 ether);
         pair.swap(0, 0.18 ether, address(this));
@@ -247,7 +249,7 @@ contract ArcadeSwapPairTest is Test {
     function testSwapBasicScenarioReverseDirection() public {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 2 ether);
-        pair.mint();
+        pair.mint(address(this));
 
         token1.transfer(address(pair), 0.2 ether);
         pair.swap(0.09 ether, 0, address(this));
@@ -268,7 +270,7 @@ contract ArcadeSwapPairTest is Test {
     function testSwapBidirectional() public {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 2 ether);
-        pair.mint();
+        pair.mint(address(this));
 
         token0.transfer(address(pair), 0.1 ether);
         token1.transfer(address(pair), 0.2 ether);
@@ -290,7 +292,7 @@ contract ArcadeSwapPairTest is Test {
     function testSwapZeroAmountOut() public {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 2 ether);
-        pair.mint();
+        pair.mint(address(this));
         vm.expectRevert(encodeError("InsufficientOutputAmount()")); //  hex"42301c23"
         pair.swap(0, 0, address(this));
     }
@@ -298,7 +300,7 @@ contract ArcadeSwapPairTest is Test {
     function testSwapInsufficientLiquidity() public {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 2 ether);
-        pair.mint();
+        pair.mint(address(this));
 
         vm.expectRevert(encodeError("InsufficientLiquidity()")); // hex"bb55fd27"
         pair.swap(0, 2.1 ether, address(this));
@@ -310,7 +312,7 @@ contract ArcadeSwapPairTest is Test {
     function testSwapInvalidEqualK() public {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 2 ether);
-        pair.mint();
+        pair.mint(address(this));
 
         token1.transfer(address(pair), 0.2 ether);
         vm.expectRevert(encodeError("InvalidK()")); // hex"bd8bc364" -- when product is equal to k
@@ -332,7 +334,7 @@ contract ArcadeSwapPairTest is Test {
     function testSwapUnderpriced() public {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 2 ether);
-        pair.mint();
+        pair.mint(address(this));
 
         token0.transfer(address(pair), 0.1 ether);
         pair.swap(0, 0.09 ether, address(this));
@@ -353,7 +355,7 @@ contract ArcadeSwapPairTest is Test {
     function testSwapOverpriced() public {
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 2 ether);
-        pair.mint();
+        pair.mint(address(this));
 
         token0.transfer(address(pair), 0.1 ether);
 
@@ -380,7 +382,7 @@ contract ArcadeSwapPairTest is Test {
         vm.warp(0);
         token0.transfer(address(pair), 1 ether);
         token1.transfer(address(pair), 1 ether);
-        pair.mint();
+        pair.mint(address(this));
 
         (
             uint256 initialPrice0,
@@ -412,7 +414,7 @@ contract ArcadeSwapPairTest is Test {
         // Price changed.
         token0.transfer(address(pair), 2 ether);
         token1.transfer(address(pair), 1 ether);
-        pair.mint();
+        pair.mint(address(this));
 
         (uint256 newPrice0, uint256 newPrice1) = calculateCurrentPrice();
 
@@ -524,7 +526,7 @@ contract TestUser {
         ERC20(token0Address_).transfer(pairAddress_, amount0_);
         ERC20(token1Address_).transfer(pairAddress_, amount1_);
 
-        ArcadeSwapPair(pairAddress_).mint();
+        ArcadeSwapPair(pairAddress_).mint(address(this));
     }
 
     function withdrawLiquidity(address pairAddress_) public {

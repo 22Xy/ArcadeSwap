@@ -97,10 +97,11 @@ contract ArcadeSwapRouter {
             } else {
                 uint256 amountAOptimal = ArcadeSwapLibrary.quote(
                     amountBDesired,
-                    reserveA,
-                    reserveB
+                    reserveB,
+                    reserveA
                 );
                 assert(amountAOptimal <= amountADesired);
+
                 if (amountAOptimal <= amountAMin) revert InsufficientAAmount();
                 (amountA, amountB) = (amountAOptimal, amountBDesired);
             }

@@ -5,7 +5,7 @@ import "./ArcadeSwapPair.sol";
 import "./interfaces/IArcadeSwapPair.sol";
 
 contract ArcadeSwapFactory {
-    error IdenticalAddress();
+    error IdenticalAddresses();
     error PairExists();
     error ZeroAddress();
 
@@ -24,7 +24,7 @@ contract ArcadeSwapFactory {
         address tokenA,
         address tokenB
     ) public returns (address pair) {
-        if (tokenA == tokenB) revert IdenticalAddress();
+        if (tokenA == tokenB) revert IdenticalAddresses();
 
         (address token0, address token1) = tokenA < tokenB
             ? (tokenA, tokenB)
