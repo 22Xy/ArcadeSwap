@@ -19,6 +19,7 @@ error TransferFailed();
 error InsufficientLiquidity();
 error InvalidK();
 error BalanceOverflow();
+error AlreadyInitialized();
 
 contract ArcadeSwapPair is ERC20, Math {
     using UQ112x112 for uint224;
@@ -40,13 +41,7 @@ contract ArcadeSwapPair is ERC20, Math {
     // 1 slot (32 bytes)
     uint256 public price1CumulativeLast;
 
-    constructor(
-        address token0_,
-        address token1_
-    ) ERC20("ArcadeSwap Pair", "ARC", 18) {
-        token0 = token0_;
-        token1 = token1_;
-    }
+    constructor() ERC20("ArcadeSwap Pair", "ARC", 18) {}
 
     event Mint(address indexed sender, uint256 amount0, uint256 amount1);
     event Burn(address indexed sender, uint256 amount0, uint256 amount1);
@@ -57,6 +52,14 @@ contract ArcadeSwapPair is ERC20, Math {
         uint256 amount1Out,
         address indexed to
     );
+
+    function initialize(address token0_, address token1_) public {
+        if (token0 != address(0) || token1 != address(0))
+            revert AlreadyInitialized();
+
+        token0 = token0_;
+        token1 = token1_;
+    }
 
     function mint() public {
         (uint112 reserve0_, uint112 reserve1_, ) = getReserves();
