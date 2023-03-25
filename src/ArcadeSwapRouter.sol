@@ -9,6 +9,8 @@ contract ArcadeSwapRouter {
     error InsufficientAAmount();
     error InsufficientBAmount();
     error SafeTransferFailed();
+    error InsufficientOutputAmount();
+    error ExcessiveInputAmount();
 
     IArcadeSwapFactory factory;
 
@@ -59,6 +61,78 @@ contract ArcadeSwapRouter {
         liquidity = IArcadeSwapPair(pairAddress).mint(to);
     }
 
+    function removeLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address to
+    ) public returns (uint256 amountA, uint256 amountB) {
+        address pair = ArcadeSwapLibrary.pairFor(
+            address(factory),
+            tokenA,
+            tokenB
+        );
+        // sending LP-tokens to the pair and burning the exact amount of tokens.
+        IArcadeSwapPair(pair).transferFrom(msg.sender, pair, liquidity);
+        (amountA, amountB) = IArcadeSwapPair(pair).burn(to);
+        if (amountA < amountAMin) revert InsufficientAAmount();
+        if (amountB < amountBMin) revert InsufficientBAmount();
+    }
+
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        address[] calldata path,
+        address to
+    ) public returns (uint256[] memory amounts) {
+        amounts = ArcadeSwapLibrary.getAmountsOut(
+            address(factory),
+            amountIn,
+            path
+        );
+        if (amounts[amounts.length - 1] < amountOutMin)
+            revert InsufficientOutputAmount();
+
+        // sending fund to the first pair, so that we can iterate if we need to
+        // initializes a swap by sending input tokens to the first pair
+        _safeTransferFrom(
+            path[0],
+            msg.sender,
+            ArcadeSwapLibrary.pairFor(address(factory), path[0], path[1]),
+            amounts[0]
+        );
+
+        // performs chained swaps
+        _swap(amounts, path, to);
+    }
+
+    function swapTokensForExactTokens(
+        uint256 amountOut,
+        uint256 amountInMax,
+        address[] calldata path,
+        address to
+    ) public returns (uint256[] memory amounts) {
+        amounts = ArcadeSwapLibrary.getAmountsIn(
+            address(factory),
+            amountOut,
+            path
+        );
+
+        if (amounts[amounts.length - 1] > amountInMax)
+            revert ExcessiveInputAmount();
+
+        _safeTransferFrom(
+            path[0],
+            msg.sender,
+            ArcadeSwapLibrary.pairFor(address(factory), path[0], path[1]),
+            amounts[0]
+        );
+
+        _swap(amounts, path, to);
+    }
+
     //// HELPER FUNCTIONS ////
     // In this function, we want to find the liquidity amounts that will satisfy
     // our desired and minimal amounts. Since there’s a delay between when we
@@ -105,6 +179,32 @@ contract ArcadeSwapRouter {
                 if (amountAOptimal <= amountAMin) revert InsufficientAAmount();
                 (amountA, amountB) = (amountAOptimal, amountBDesired);
             }
+        }
+    }
+
+    function _swap(
+        uint256[] memory amounts,
+        address[] memory path,
+        address to_
+    ) internal {
+        for (uint256 i; i < path.length - 1; i++) {
+            (address input, address output) = (path[i], path[i + 1]);
+            (address token0, ) = ArcadeSwapLibrary.sortTokens(input, output);
+            uint256 amountOut = amounts[i + 1];
+            (uint256 amount0Out, uint256 amount1Out) = input == token0
+                ? (uint256(0), amountOut)
+                : (amountOut, uint256(0));
+
+            address to = i < path.length - 2
+                ? ArcadeSwapLibrary.pairFor(
+                    address(factory),
+                    output,
+                    path[i + 2]
+                )
+                : to_;
+            IArcadeSwapPair(
+                ArcadeSwapLibrary.pairFor(address(factory), input, output)
+            ).swap(amount0Out, amount1Out, to, "");
         }
     }
 

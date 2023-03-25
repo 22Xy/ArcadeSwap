@@ -108,7 +108,9 @@ contract ArcadeSwapPairTest is Test {
 
         pair.mint(address(this)); // + 1 LP
 
-        pair.burn(); // - 1 LP
+        uint256 liquidity = pair.balanceOf(address(this));
+        pair.transfer(address(pair), liquidity);
+        pair.burn(address(this)); // - 1 LP
 
         assertEq(pair.balanceOf(address(this)), 0);
         assertReserves(1000, 1000);
@@ -128,7 +130,9 @@ contract ArcadeSwapPairTest is Test {
 
         pair.mint(address(this)); // + 1 LP
 
-        pair.burn();
+        uint256 liquidity = pair.balanceOf(address(this));
+        pair.transfer(address(pair), liquidity);
+        pair.burn(address(this));
 
         assertEq(pair.balanceOf(address(this)), 0);
         assertReserves(1500, 1000);
@@ -163,7 +167,12 @@ contract ArcadeSwapPairTest is Test {
 
         assertEq(pair.balanceOf(address(this)), 1 ether);
 
-        pair.burn();
+        uint256 liquidity = pair.balanceOf(address(this));
+        // send all LP tokens of this contract (Liquidity provider) to
+        // pair contract, then the balance of pair contract is equal to
+        // the amount this contract own.
+        pair.transfer(address(pair), liquidity);
+        pair.burn(address(this));
 
         // this user is penalized for providing unbalanced liquidity
         assertEq(pair.balanceOf(address(this)), 0);
@@ -195,7 +204,7 @@ contract ArcadeSwapPairTest is Test {
         // 0x12; If you divide or modulo by zero.
         // hex"4e487b710000000000000000000000000000000000000000000000000000000000000012"
         vm.expectRevert(encodeError("Panic(uint256)", 0x12));
-        pair.burn();
+        pair.burn(address(this));
     }
 
     function testBurnZeroLiquidity() public {
@@ -208,7 +217,7 @@ contract ArcadeSwapPairTest is Test {
         // bytes memory prankData = abi.encodeWithSignature("burn()");
         vm.prank(address(0xdeadbeef));
         vm.expectRevert(encodeError("InsufficientLiquidityBurned()")); // hex"749383ad"
-        pair.burn();
+        pair.burn(address(this));
     }
 
     function testReservesPacking() public {
@@ -231,7 +240,7 @@ contract ArcadeSwapPairTest is Test {
         pair.mint(address(this));
 
         token0.transfer(address(pair), 0.1 ether);
-        pair.swap(0, 0.18 ether, address(this));
+        pair.swap(0, 0.18 ether, address(this), "");
 
         assertEq(
             token0.balanceOf(address(this)),
@@ -252,7 +261,7 @@ contract ArcadeSwapPairTest is Test {
         pair.mint(address(this));
 
         token1.transfer(address(pair), 0.2 ether);
-        pair.swap(0.09 ether, 0, address(this));
+        pair.swap(0.09 ether, 0, address(this), "");
 
         assertEq(
             token0.balanceOf(address(this)),
@@ -274,7 +283,7 @@ contract ArcadeSwapPairTest is Test {
 
         token0.transfer(address(pair), 0.1 ether);
         token1.transfer(address(pair), 0.2 ether);
-        pair.swap(0.09 ether, 0.18 ether, address(this));
+        pair.swap(0.09 ether, 0.18 ether, address(this), "");
 
         assertEq(
             token0.balanceOf(address(this)),
@@ -294,7 +303,7 @@ contract ArcadeSwapPairTest is Test {
         token1.transfer(address(pair), 2 ether);
         pair.mint(address(this));
         vm.expectRevert(encodeError("InsufficientOutputAmount()")); //  hex"42301c23"
-        pair.swap(0, 0, address(this));
+        pair.swap(0, 0, address(this), "");
     }
 
     function testSwapInsufficientLiquidity() public {
@@ -303,10 +312,10 @@ contract ArcadeSwapPairTest is Test {
         pair.mint(address(this));
 
         vm.expectRevert(encodeError("InsufficientLiquidity()")); // hex"bb55fd27"
-        pair.swap(0, 2.1 ether, address(this));
+        pair.swap(0, 2.1 ether, address(this), "");
 
         vm.expectRevert(encodeError("InsufficientLiquidity()")); // hex"bb55fd27"
-        pair.swap(1.1 ether, 0, address(this));
+        pair.swap(1.1 ether, 0, address(this), "");
     }
 
     function testSwapInvalidEqualK() public {
@@ -316,7 +325,7 @@ contract ArcadeSwapPairTest is Test {
 
         token1.transfer(address(pair), 0.2 ether);
         vm.expectRevert(encodeError("InvalidK()")); // hex"bd8bc364" -- when product is equal to k
-        pair.swap(1 ether, 0, address(this));
+        pair.swap(1 ether, 0, address(this), "");
 
         assertEq(
             token0.balanceOf(address(this)),
@@ -337,7 +346,7 @@ contract ArcadeSwapPairTest is Test {
         pair.mint(address(this));
 
         token0.transfer(address(pair), 0.1 ether);
-        pair.swap(0, 0.09 ether, address(this));
+        pair.swap(0, 0.09 ether, address(this), "");
 
         assertEq(
             token0.balanceOf(address(this)),
@@ -361,7 +370,7 @@ contract ArcadeSwapPairTest is Test {
 
         // console.logBytes(encodeError("InvalidK()"));
         vm.expectRevert(encodeError("InvalidK()")); // hex"bd8bc364"
-        pair.swap(0, 0.36 ether, address(this));
+        pair.swap(0, 0.36 ether, address(this), "");
 
         assertEq(
             token0.balanceOf(address(this)),
@@ -374,6 +383,17 @@ contract ArcadeSwapPairTest is Test {
             "unexpected token1 balance"
         );
         assertReserves(1 ether, 2 ether);
+    }
+
+    function testSwapUnpaidFee() public {
+        token0.transfer(address(pair), 1 ether);
+        token1.transfer(address(pair), 2 ether);
+        pair.mint(address(this));
+
+        token0.transfer(address(pair), 0.1 ether);
+
+        vm.expectRevert(encodeError("InvalidK()"));
+        pair.swap(0, 0.181322178776029827 ether, address(this), "");
     }
 
     function testCumulativePrices() public {
@@ -447,6 +467,31 @@ contract ArcadeSwapPairTest is Test {
             initialPrice0 * 3 + newPrice0 * 3,
             initialPrice1 * 3 + newPrice1 * 3
         );
+    }
+
+    function testFlashloan() public {
+        token0.transfer(address(pair), 1 ether);
+        token1.transfer(address(pair), 2 ether);
+
+        pair.mint(address(this));
+
+        uint256 flashloanAmount = 0.1 ether;
+        // Because Uniswap charges fees on input amounts,
+        // the fee relative to the withdrawn amount (output amount)
+        // is actually slightly higher: (1 / (1 - 0.003)) - 1 = 3 / 997 ~= 0.3009203%
+        // uint256 flashLoanFee = (flashloanAmount * 1000) / 997 - flashloanAmount;
+        // + 1 to prevent rounding problem
+        uint256 flashLoanFee = (flashloanAmount * 1000) /
+            997 -
+            flashloanAmount +
+            1;
+
+        Flashloaner fl = new Flashloaner();
+        token1.transfer(address(fl), flashLoanFee);
+        fl.flashloan(address(pair), 0, flashloanAmount, address(token1));
+
+        assertEq(token1.balanceOf(address(fl)), 0);
+        assertEq(token1.balanceOf(address(pair)), 2 ether + flashLoanFee);
     }
 
     ////////////////////////
@@ -530,6 +575,51 @@ contract TestUser {
     }
 
     function withdrawLiquidity(address pairAddress_) public {
-        ArcadeSwapPair(pairAddress_).burn();
+        uint256 liquidity = ERC20(pairAddress_).balanceOf(address(this));
+        ERC20(pairAddress_).transfer(pairAddress_, liquidity);
+        ArcadeSwapPair(pairAddress_).burn(address(this));
+    }
+}
+
+contract Flashloaner {
+    error InsufficientFlashLoanAmount();
+    uint256 expectedLoanAmount;
+
+    function flashloan(
+        address pairAddress,
+        uint256 amount0Out,
+        uint256 amount1Out,
+        address tokenAddress
+    ) public {
+        if (amount0Out > 0) {
+            expectedLoanAmount = amount0Out;
+        }
+        if (amount1Out > 0) {
+            expectedLoanAmount = amount1Out;
+        }
+
+        // Alternatively, we could’ve stored this address in a state variable.
+        // Since data is a byte array, we need a way to convert an address to
+        // bytes, and abi.encode is a common solution for that.
+        ArcadeSwapPair(pairAddress).swap(
+            amount0Out,
+            amount1Out,
+            address(this),
+            abi.encode(tokenAddress)
+        );
+    }
+
+    function arcadeSwapCall(
+        address sender,
+        uint256 amount0Out,
+        uint256 amount1Out,
+        bytes calldata data
+    ) public {
+        address tokenAddress = abi.decode(data, (address));
+        uint256 balance = ERC20(tokenAddress).balanceOf(address(this));
+
+        if (balance < expectedLoanAmount) revert InsufficientFlashLoanAmount();
+
+        ERC20(tokenAddress).transfer(msg.sender, balance);
     }
 }
