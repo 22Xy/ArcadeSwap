@@ -24,4 +24,6 @@ body,
 
 #root {
   @apply bg-gradient-to-r from-violet-200 via-pink-200 to-fuchsia-200;
+  background-image: url("../public/bg.png");
+  background-size: cover;
 }
