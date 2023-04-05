@@ -1,8 +1,15 @@
 # ArcadeSwap - Future DeFi User Experience
 
+![18291680686424_ pic_hd](https://user-images.githubusercontent.com/56213581/230039029-f31ad0f3-1842-4908-a9d2-01c3ab507b3c.jpg)
+![18301680686459_ pic_hd](https://user-images.githubusercontent.com/56213581/230039047-13b44b80-f52b-45da-ba03-fd836b1bf33e.jpg)
+![18311680686693_ pic_hd](https://user-images.githubusercontent.com/56213581/230039813-18078cfe-1104-496d-905a-deaa683a5751.jpg)
+![18321680686710_ pic_hd](https://user-images.githubusercontent.com/56213581/230039829-238e02db-09b7-4816-a077-0c72b997f4b9.jpg)
+
+<!---
 ![Frame 10](https://user-images.githubusercontent.com/56213581/227741678-c0352b46-2a54-4136-9c47-4f725ada1429.png)
 ![Frame 11](https://user-images.githubusercontent.com/56213581/227741690-9c921702-c0fb-405d-bf0f-874cd029cc6a.png)
 ![Frame 12](https://user-images.githubusercontent.com/56213581/227746937-88d5bcfc-fa28-4902-9cc9-020e7f732c1b.png)
+-->
 
 ## Run it locally
 
@@ -23,6 +30,17 @@ Run deployment script with private key of first account (0xf39fd6e51aad88f6f4ce6
 ```shell
 forge script scripts/DeployDevelopment.s.sol --broadcast --fork-url http://localhost:8545 --private-key $privateKey
 ```
+
+## Interact with it through React app
+
+Install all dependencies and run the React app locally at http://localhost:3000/
+
+```shell
+npm i
+npm run start
+```
+
+## Interact with it through CLI
 
 Example of checking ETH token balance using `cast`
 
