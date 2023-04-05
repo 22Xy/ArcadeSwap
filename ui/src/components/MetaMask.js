@@ -21,7 +21,8 @@ const shortAddress = (address) =>
 const statusConnected = (account, chain) => {
   return (
     <span>
-      Connected to {chainIdToChain(chain)} as {shortAddress(account)}
+      Connected to {chainIdToChain(chain)} as{" "}
+      <strong>{shortAddress(account)}</strong>
     </span>
   );
 };
@@ -29,7 +30,10 @@ const statusConnected = (account, chain) => {
 const statusNotConnected = (connect) => {
   return (
     <span>
-      MetaMask is not connected. <button onClick={connect}>Connect</button>
+      🦊 MetaMask is not connected.{" "}
+      <button onClick={connect} className="font-bold">
+        Connect
+      </button>
     </span>
   );
 };
@@ -43,7 +47,7 @@ const renderStatus = (status, account, chain, connect) => {
       return statusNotConnected(connect);
 
     case "not_installed":
-      return <span>MetaMask is not installed.</span>;
+      return <span>🦊 MetaMask is not installed.</span>;
 
     default:
       return;
