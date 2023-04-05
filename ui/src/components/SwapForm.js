@@ -1,181 +1,278 @@
 import "./SwapForm.css";
 import { ethers } from "ethers";
 import { useContext, useEffect, useState } from "react";
+import { uint256Max } from "../lib/constants";
 import { MetaMaskContext } from "../contexts/MetaMask";
+import config from "../config.js";
+import debounce from "../lib/debounce";
+import AddLiquidityForm from "./AddLiquidityForm";
 
-const tokens = ["WETH", "USDC"];
-
-const TokensList = (props) => {
+const SwapInput = ({
+  token,
+  tokens,
+  onChange,
+  amount,
+  setAmount,
+  disabled,
+  readOnly,
+}) => {
   return (
-    <select defaultValue={props.selected}>
-      {tokens.map((t) => (
-        <option key={t}>{t}</option>
-      ))}
-    </select>
+    <fieldset className="SwapInput" disabled={disabled}>
+      <input
+        type="text"
+        id={token + "_amount"}
+        placeholder="0.0"
+        value={amount}
+        onChange={(ev) => setAmount(ev.target.value)}
+        readOnly={readOnly}
+      />
+      <select name="token" value={token} onChange={onChange}>
+        {tokens.map((t) => (
+          <option key={`${token}_${t.symbol}`}>{t.symbol}</option>
+        ))}
+      </select>
+    </fieldset>
   );
 };
 
-const addLiquidity = (
-  account,
-  { token0, token1, manager },
-  { managerAddress, poolAddress }
-) => {
-  if (!token0 || !token1) {
-    return;
-  }
+// const defaultPairs = [
+//   {
+//     token0: {
+//       address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+//       symbol: "ETH",
+//     },
+//     token1: {
+//       address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+//       symbol: "USDC",
+//     },
+//   },
+//   {
+//     token0: {
+//       address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+//       symbol: "ETH",
+//     },
+//     token1: {
+//       address: "0xe4e559dB9e0f4C853649b0EbabC899D1797De300",
+//       symbol: "BTC",
+//     },
+//   },
+//   {
+//     token0: {
+//       address: "0xe4e559dB9e0f4C853649b0EbabC899D1797De300",
+//       symbol: "BTC",
+//     },
+//     token1: {
+//       address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+//       symbol: "USDC",
+//     },
+//   },
+// ];
 
-  const amount0 = ethers.utils.parseEther("0.998976618347425280");
-  const amount1 = ethers.utils.parseEther("5000"); // 5000 USDC
-  const lowerTick = 84222;
-  const upperTick = 86129;
-  const liquidity = ethers.BigNumber.from("1517882343751509868544");
-  const extra = ethers.utils.defaultAbiCoder.encode(
-    ["address", "address", "address"],
-    [token0.address, token1.address, account]
-  );
-
-  Promise.all([
-    token0.allowance(account, managerAddress),
-    token1.allowance(account, managerAddress),
-  ])
-    .then(([allowance0, allowance1]) => {
-      return Promise.resolve()
-        .then(() => {
-          if (allowance0.lt(amount0)) {
-            return token0
-              .approve(managerAddress, amount0)
-              .then((tx) => tx.wait());
-          }
-        })
-        .then(() => {
-          if (allowance1.lt(amount1)) {
-            return token1
-              .approve(managerAddress, amount1)
-              .then((tx) => tx.wait());
-          }
-        })
-        .then(() => {
-          return manager
-            .mint(poolAddress, lowerTick, upperTick, liquidity, extra)
-            .then((tx) => tx.wait());
-        })
-        .then(() => {
-          alert("Liquidity added!");
-        });
-    })
-    .catch((err) => {
-      console.error(err);
-      alert("Failed!");
-    });
-};
-
-const swap = (
-  amountIn,
-  account,
-  { tokenIn, manager, token0, token1 },
-  { managerAddress, poolAddress }
-) => {
-  const amountInWei = ethers.utils.parseEther(amountIn);
-  const extra = ethers.utils.defaultAbiCoder.encode(
-    ["address", "address", "address"],
-    [token0.address, token1.address, account]
-  );
-
-  tokenIn
-    .allowance(account, managerAddress)
-    .then((allowance) => {
-      if (allowance.lt(amountInWei)) {
-        return tokenIn
-          .approve(managerAddress, amountInWei)
-          .then((tx) => tx.wait());
-      }
-    })
-    .then(() => {
-      return manager.swap(poolAddress, extra).then((tx) => tx.wait());
-    })
-    .then(() => {
-      alert("Swap succeeded!");
-    })
-    .catch((err) => {
-      console.error(err);
-      alert("Failed!");
-    });
-};
-
-const SwapForm = (props) => {
+const SwapForm = () => {
   const metamaskContext = useContext(MetaMaskContext);
   const enabled = metamaskContext.status === "connected";
+  const account = metamaskContext.account;
 
-  const amount0 = 0.008396714242162444;
-  const amount1 = 42;
+  const tokens = [
+    {
+      symbol: "ETH",
+      address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+      selected: false,
+    },
+    {
+      symbol: "USDC",
+      address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      selected: false,
+    },
+  ];
 
-  const [token0, setToken0] = useState();
-  const [token1, setToken1] = useState();
-  const [manager, setManager] = useState();
+  const [amount0, setAmount0] = useState(0);
+  const [amount1, setAmount1] = useState(0);
+  const [tokenIn, setTokenIn] = useState();
+
+  const [library, setLibrary] = useState();
+  const [router, setRouter] = useState();
+  const [pair, setPair] = useState();
+  const [loading, setLoading] = useState(false);
+  const [addingLiquidity, setAddingLiquidity] = useState(false);
+  const path = [
+    "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+    "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+  ];
 
   useEffect(() => {
-    setToken0(
+    setLibrary(
       new ethers.Contract(
-        props.config.token0Address,
-        props.config.ABIs.ERC20,
+        config.libraryAddress,
+        config.ABIs.ArcadeSwapLibrary,
         new ethers.providers.Web3Provider(window.ethereum).getSigner()
       )
     );
-    setToken1(
+    setRouter(
       new ethers.Contract(
-        props.config.token1Address,
-        props.config.ABIs.ERC20,
+        config.routerAddress,
+        config.ABIs.ArcadeSwapRouter,
         new ethers.providers.Web3Provider(window.ethereum).getSigner()
       )
     );
-    setManager(
+    setTokenIn(
       new ethers.Contract(
-        props.config.managerAddress,
-        props.config.ABIs.Manager,
+        config.wethAddress,
+        config.ABIs.ERC20Mintable,
+        new ethers.providers.Web3Provider(window.ethereum).getSigner()
+      )
+    );
+    setPair(
+      new ethers.Contract(
+        config.ethUsdcPair,
+        config.ABIs.ArcadeSwapPair,
         new ethers.providers.Web3Provider(window.ethereum).getSigner()
       )
     );
   }, []);
 
-  const addLiquidity_ = () => {
-    addLiquidity(
-      metamaskContext.account,
-      { token0, token1, manager },
-      props.config
-    );
+  /**
+   * Swaps tokens by calling Router contract. Before swapping, asks users to approve spending of tokens.
+   */
+  const swap = (e) => {
+    e.preventDefault();
+
+    const amountIn = ethers.utils.parseEther(amount0);
+    const amountOutMin = ethers.utils.parseEther(amount1);
+
+    const token = tokenIn.attach(path[0]);
+
+    token
+      .allowance(account, config.routerAddress)
+      .then((allowance) => {
+        if (allowance.lt(amountIn)) {
+          return token
+            .approve(config.routerAddress, uint256Max)
+            .then((tx) => tx.wait());
+        }
+      })
+      .then(() => {
+        return router
+          .swapExactTokensForTokens(amountIn, amountOutMin, path, account)
+          .then((tx) => tx.wait());
+      })
+      .then(() => {
+        alert("Swap succeeded!");
+      })
+      .catch((err) => {
+        console.error(err);
+        alert("Failed!");
+      });
   };
 
-  const swap_ = (e) => {
-    e.preventDefault();
-    swap(
-      amount1.toString(),
-      metamaskContext.account,
-      { tokenIn: token1, manager, token0, token1 },
-      props.config
-    );
+  /**
+   * Calculates output amount by querying Router contract. Sets 'priceAfter' and 'amountOut'.
+   */
+  const updateAmountOut = debounce((amount) => {
+    if (amount === 0 || amount === "0") {
+      return;
+    }
+
+    setLoading(true);
+
+    const amountIn = ethers.utils.parseEther(amount);
+
+    pair.callStatic
+      .getReserves()
+      .then((res) => {
+        library.callStatic
+          .getAmountOut(amountIn, res[0], res[1])
+          .then((amount) => {
+            console.log(amount);
+            setAmount1(ethers.utils.formatEther(amount));
+            setLoading(false);
+          })
+          .catch((err) => {
+            setLoading(false);
+            console.error(err);
+          });
+      })
+      .catch((err) => {
+        setLoading(false);
+        console.error(err);
+      });
+  });
+
+  /**
+   *  Wraps 'setAmount', ensures amount is correct, and calls 'updateAmountOut'.
+   */
+  const setAmountFn = (setAmountFn) => {
+    return (amount) => {
+      amount = amount || 0;
+      setAmountFn(amount);
+      updateAmountOut(amount);
+    };
+  };
+
+  const toggleAddLiquidityForm = () => {
+    setAddingLiquidity(!addingLiquidity);
+  };
+
+  const tokenByAddress = (address) => {
+    return tokens.filter((t) => t.address === address)[0];
   };
 
   return (
     <section className="SwapContainer">
+      {addingLiquidity && (
+        <AddLiquidityForm
+          toggle={toggleAddLiquidityForm}
+          token0Info={tokens.filter((t) => t.address === path[0])[0]}
+          token1Info={tokens.filter((t) => t.address === path[1])[0]}
+        />
+      )}
       <header>
         <h1>Swap tokens</h1>
-        <button disabled={!enabled} onClick={addLiquidity_}>
+        <button disabled={!enabled || loading} onClick={toggleAddLiquidityForm}>
           Add liquidity
         </button>
       </header>
-      <form className="SwapForm">
-        <fieldset>
-          <input type="text" placeholder="0.0" value={amount1} readOnly />
-          <TokensList selected="USDC" />
-        </fieldset>
-        <fieldset>
-          <input type="text" placeholder="0.0" value={amount0} readOnly />
-          <TokensList selected="WETH" />
-        </fieldset>
-        <button disabled={!enabled} onClick={swap_}>
-          Swap
-        </button>
-      </form>
+      {path ? (
+        <form className="SwapForm">
+          <SwapInput
+            amount={amount0}
+            disabled={!enabled || loading}
+            readOnly={false}
+            setAmount={setAmountFn(setAmount0)}
+            token={tokenByAddress(path[0]).symbol}
+            tokens={[
+              {
+                symbol: "WETH",
+                address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+                selected: false,
+              },
+            ]}
+          />
+          <SwapInput
+            amount={amount1}
+            disabled={!enabled || loading}
+            readOnly={true}
+            setAmount={setAmountFn(setAmount1)}
+            token={tokenByAddress(path[path.length - 1]).symbol}
+            tokens={[
+              {
+                symbol: "USDC",
+                address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+                selected: false,
+              },
+            ]}
+          />
+          <button
+            className="swap"
+            disabled={!enabled || loading}
+            onClick={swap}
+          >
+            Swap
+          </button>
+        </form>
+      ) : (
+        <span>Loading pairs...</span>
+      )}
     </section>
   );
 };
