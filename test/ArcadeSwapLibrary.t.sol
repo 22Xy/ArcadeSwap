@@ -106,7 +106,7 @@ contract ArcadeSwapLibraryTest is Test {
             address(tokenB)
         );
         // forge test -vvvv look at trace to get this address
-        assertEq(pairAddress, 0x8f1961A0aA07941702f1846EFe04290B77318875);
+        assertEq(pairAddress, 0x8128C27e97B2BD341194f9D59751b1e4d32FBD4F);
     }
 
     function testGetAmountOut() public {

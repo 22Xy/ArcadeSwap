@@ -49,7 +49,7 @@ contract ArcadeSwapRouterTest is Test {
         );
 
         address pairAddress = factory.pairs(address(tokenA), address(tokenB));
-        assertEq(pairAddress, 0x150Fba8Dba68507f503420A87DB8220a563afcB7);
+        assertEq(pairAddress, 0xaD821152321Db1DDa8Ab9528E597100EDcB2A0af);
     }
 
     function testAddLiquidityNoPair() public {
