@@ -1,5 +1,5 @@
 .SwapContainer {
-  width: 22vw;
+  width: 25rem;
   @apply py-4 px-6 bg-white rounded-xl shadow-lg;
 }
 
@@ -20,21 +20,38 @@
 }
 
 .SwapForm fieldset {
-  @apply flex flex-row;
+  @apply flex flex-row mb-2;
 }
 
-.SwapForm fieldset select {
-  @apply bg-slate-50 border border-purple-400 rounded mb-2 rounded-tl-none rounded-bl-none border-l-0;
+.SwapForm .SwapInput input {
+  @apply border border-purple-400 rounded px-4 py-2 bg-slate-50 text-xl rounded-tr-none rounded-br-none border-r-0 w-full;
 }
 
-.SwapForm input {
-  @apply border border-purple-400 rounded mb-2 px-4 py-2 bg-slate-50 text-xl rounded-tr-none rounded-br-none border-r-0 w-full;
+.SwapForm .SwapInput select {
+  @apply flex flex-col justify-center pr-2 h-auto bg-slate-50 border border-purple-400 rounded rounded-tl-none rounded-bl-none border-l-0 pt-3;
 }
 
-.SwapForm button {
-  @apply w-full rounded-xl py-4 bg-slate-100 text-xl mt-3;
+.SwapForm button.swap {
+  @apply w-full rounded-xl py-4 bg-slate-100 text-xl;
 }
 
-.SwapForm button:hover {
+.SwapForm button.swap:hover {
   @apply bg-pink-100;
+}
+
+.ChangeDirectionBtn {
+  @apply mb-2 text-xl;
+}
+
+.SlippageControl {
+  @apply items-center justify-end !mb-3 mt-2;
+}
+
+.SlippageControl label {
+  @apply text-sm whitespace-nowrap mr-2;
+}
+
+.SlippageControl input {
+  width: 5rem;
+  @apply border border-purple-400 rounded px-4 py-2 bg-slate-50 text-xl;
 }

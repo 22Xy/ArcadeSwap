@@ -40,6 +40,19 @@ contract DeployDevelopment is Script {
         tokenB.mint(user2, 2000 ether);
         tokenC.mint(user2, 2000 ether);
 
+        address ETH_USDC_PAIR = factory.createPair(
+            address(tokenA),
+            address(tokenB)
+        );
+        address ETH_BTC_PAIR = factory.createPair(
+            address(tokenA),
+            address(tokenC)
+        );
+        address BTC_USDC_PAIR = factory.createPair(
+            address(tokenC),
+            address(tokenB)
+        );
+
         vm.stopBroadcast();
         // DEPLOYING DONE
 
@@ -50,5 +63,9 @@ contract DeployDevelopment is Script {
         console.log("Factory address", address(factory));
         console.log("Router address", address(router));
         console.log("Library address", address(ArcadeSwapLibrary));
+
+        console.log("ETH USDC pair address", ETH_USDC_PAIR);
+        console.log("ETH BTC pair address", ETH_BTC_PAIR);
+        console.log("BTC USDC pair address", BTC_USDC_PAIR);
     }
 }
