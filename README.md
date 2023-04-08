@@ -11,7 +11,7 @@
 ![Frame 12](https://user-images.githubusercontent.com/56213581/227746937-88d5bcfc-fa28-4902-9cc9-020e7f732c1b.png)
 -->
 
-## Run it locally
+# Run it locally
 
 Change the name of file `.env-example` to `.env` and run
 
@@ -32,6 +32,18 @@ forge script scripts/DeployDevelopment.s.sol --broadcast --fork-url http://local
 ```
 
 ## Interact with it through React app
+
+To interact with the app in the browser, you need to first
+
+### Add Localhost Network in Metamask app
+
+<div style="inline">
+<img width="250" alt="image" src="https://user-images.githubusercontent.com/56213581/230732991-fb1b4008-3b5f-448c-86c3-a23b5d2c68b0.png">
+
+<img width="500" alt="image" src="https://user-images.githubusercontent.com/56213581/230733007-b42a465d-4a0c-476a-bc7d-67e13d7db50b.png">
+</div>
+
+Make sure `anvil` is running in the background, switch the network to the newly added `Localhost 8545` network. 
 
 Install all dependencies and run the React app locally at http://localhost:3000/
 
