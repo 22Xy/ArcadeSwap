@@ -617,6 +617,7 @@ contract Flashloaner {
     ) public {
         address tokenAddress = abi.decode(data, (address));
         uint256 balance = ERC20(tokenAddress).balanceOf(address(this));
+        console.log(sender, amount0Out, amount1Out);
 
         if (balance < expectedLoanAmount) revert InsufficientFlashLoanAmount();
 
